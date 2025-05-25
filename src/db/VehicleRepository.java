@@ -47,7 +47,7 @@ public class VehicleRepository {
     /**
      * Oznacza pojazd jako wypożyczony (status=RENTED + daty).
      */
-    public static boolean rentVehicle(Vehicle v, Date from, Date to) {
+    public static boolean rentVehicle(Vehicle v, Date from, Date to, double discountPercent) {
         MongoCollection<Document> col = getCollectionFor(v);
         String id = v.getId();
         UpdateResult res = col.updateOne(
@@ -55,7 +55,8 @@ public class VehicleRepository {
                 Updates.combine(
                         Updates.set("status", "RENTED"),
                         Updates.set("rentedFrom", from),
-                        Updates.set("rentedTo", to)
+                        Updates.set("rentedTo", to),
+                        Updates.set("discountPercent", discountPercent)
                 )
         );
         return res.getModifiedCount() == 1;
@@ -72,7 +73,8 @@ public class VehicleRepository {
                 Updates.combine(
                         Updates.set("status", "AVAILABLE"),
                         Updates.unset("rentedFrom"),
-                        Updates.unset("rentedTo")
+                        Updates.unset("rentedTo"),
+                        Updates.unset("discountPercent")
                 )
         );
         return res.getModifiedCount() == 1;
@@ -88,46 +90,38 @@ public class VehicleRepository {
             boolean isRented = "RENTED".equalsIgnoreCase(status);
             if (onlyRented ^ isRented) continue;
 
-            // pobranie id jako String
-            Object idObj = doc.get("_id");
-            String id = idObj.toString();
-
-            // podstawowe pola
-            String brand = doc.getString("brand");
-            String model = doc.getString("model");
+            String id       = doc.get("_id").toString();
+            String brand    = doc.getString("brand");
+            String model    = doc.getString("model");
             Object priceObj = doc.containsKey("basePricePerHour")
                     ? doc.get("basePricePerHour")
                     : doc.get("priceperhour");
-            double price = (priceObj instanceof Number)
-                    ? ((Number) priceObj).doubleValue()
-                    : 0.0;
-            String color = doc.getString("color");
-            Integer year = doc.getInteger("year");
-
-            // pobranie okresu wypożyczenia
-            Date rentedFrom = doc.getDate("rentedFrom");  // null jeśli brak
+            double price    = (priceObj instanceof Number) ? ((Number) priceObj).doubleValue() : 0.0;
+            String color    = doc.getString("color");
+            Integer year    = doc.getInteger("year");
+            Date rentedFrom = doc.getDate("rentedFrom");
             Date rentedTo   = doc.getDate("rentedTo");
+            double discount = doc.containsKey("discountPercent")
+                    ? doc.getDouble("discountPercent")
+                    : 0.0;
 
             Vehicle v;
             switch (type) {
                 case "CAR":
-                    v = new Car(id, brand, model, price, status, color, year,
-                            doc.getString("licensePlate"));
+                    v = new Car(id, brand, model, price, status, color, year, doc.getString("licensePlate"));
                     break;
                 case "BIKE":
-                    v = new Bike(id, brand, model, price, status, color, year,
-                            doc.getString("serialNumber"));
+                    v = new Bike(id, brand, model, price, status, color, year, doc.getString("serialNumber"));
                     break;
                 case "SCOOTER":
-                    v = new Scooter(id, brand, model, price, status, color, year,
-                            doc.getString("serialNumber"));
+                    v = new Scooter(id, brand, model, price, status, color, year, doc.getString("serialNumber"));
                     break;
                 default:
                     continue;
             }
-            // ustawienie okresu na obiekcie
             v.setRentedFrom(rentedFrom);
             v.setRentedTo(rentedTo);
+            v.setDiscountPercent(discount);
 
             result.add(v);
         }

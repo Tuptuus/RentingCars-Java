@@ -26,8 +26,4 @@ public class MongoConnection {
     public static MongoCollection<Document> getRentedCollection(){
         return mongoDatabase.getCollection("Rented");
     }
-    public static void printCollections(){
-        System.out.println("Collections:");
-        mongoDatabase.listCollectionNames().forEach(name->System.out.println(" * " + name));
-    }
 }

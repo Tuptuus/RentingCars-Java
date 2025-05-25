@@ -1,3 +1,4 @@
+// src/GUI/DetailsPanel.java
 package GUI;
 
 import db.VehicleRepository;
@@ -9,10 +10,8 @@ import model.Scooter;
 import javax.swing.*;
 import javax.swing.event.ListSelectionEvent;
 import java.awt.*;
-import java.time.Duration;
 import java.util.Date;
 import java.util.List;
-import java.util.Objects;
 
 public class DetailsPanel extends JPanel {
     private final DefaultListModel<Vehicle> model = new DefaultListModel<>();
@@ -31,6 +30,7 @@ public class DetailsPanel extends JPanel {
     private final JPanel inputDatesPanel;
     private final JSpinner spinnerFrom;
     private final JSpinner spinnerTo;
+    private final JSpinner spinnerDiscount;
     private final JPanel labelDatesPanel;
     private final JLabel lblFromValue;
     private final JLabel lblToValue;
@@ -65,19 +65,22 @@ public class DetailsPanel extends JPanel {
         info.setBorder(BorderFactory.createEmptyBorder(10,10,10,10));
         info.add(new JLabel("Pojazd:"));    info.add(lblBrandModel);
         info.add(new JLabel("Status:"));    info.add(lblStatus);
-        info.add(new JLabel("Rok:"));      info.add(lblYear);
-        info.add(new JLabel("Kolor:"));    info.add(lblColor);
+        info.add(new JLabel("Rok:"));       info.add(lblYear);
+        info.add(new JLabel("Kolor:"));     info.add(lblColor);
         info.add(new JLabel("Nr seryjny/Tablica:")); info.add(lblSerialOrPlate);
-        info.add(new JLabel("Cena za godzinę:"));  info.add(lblPricePerHour);
+        info.add(new JLabel("Cena za godzinę:"));    info.add(lblPricePerHour);
         detailsAndBooking.add(info, BorderLayout.NORTH);
 
-        // 2) Panel dat z przełączaniem
-        inputDatesPanel = new JPanel(new GridLayout(2,2,5,5));
-        inputDatesPanel.setBorder(BorderFactory.createTitledBorder("Okres wypożyczenia"));
-        spinnerFrom = createDateSpinner();
-        spinnerTo   = createDateSpinner();
-        inputDatesPanel.add(new JLabel("Data od:")); inputDatesPanel.add(spinnerFrom);
-        inputDatesPanel.add(new JLabel("Data do:")); inputDatesPanel.add(spinnerTo);
+        // 2) Panel dat i zniżki
+        inputDatesPanel = new JPanel(new GridLayout(3,2,5,5));
+        inputDatesPanel.setBorder(BorderFactory.createTitledBorder("Okres wypożyczenia i zniżka"));
+        spinnerFrom     = createDateSpinner();
+        spinnerTo       = createDateSpinner();
+        spinnerDiscount = new JSpinner(new SpinnerNumberModel(0.0, 0.0, 100.0, 0.5));
+
+        inputDatesPanel.add(new JLabel("Data od:"));    inputDatesPanel.add(spinnerFrom);
+        inputDatesPanel.add(new JLabel("Data do:"));    inputDatesPanel.add(spinnerTo);
+        inputDatesPanel.add(new JLabel("Zniżka [%]:")); inputDatesPanel.add(spinnerDiscount);
 
         labelDatesPanel = new JPanel(new GridLayout(2,2,5,5));
         labelDatesPanel.setBorder(BorderFactory.createTitledBorder("Okres wypożyczenia"));
@@ -123,9 +126,7 @@ public class DetailsPanel extends JPanel {
     public void showVehicles(List<Vehicle> vehicles) {
         model.clear();
         vehicles.forEach(model::addElement);
-        if (!vehicles.isEmpty()) {
-            list.setSelectedIndex(0);
-        }
+        if (!vehicles.isEmpty()) list.setSelectedIndex(0);
     }
 
     private void onSelectVehicle(ListSelectionEvent ev) {
@@ -136,12 +137,10 @@ public class DetailsPanel extends JPanel {
         boolean isRented      = "RENTED".equalsIgnoreCase(v.getStatus());
         boolean isMaintenance = "MAINTENANCE".equalsIgnoreCase(v.getStatus());
 
-        // podstawowe pola
         lblBrandModel.setText(v.getBrand() + " " + v.getModel());
         lblYear      .setText(v.getYear() != 0 ? String.valueOf(v.getYear()) : "–");
         lblColor     .setText(v.getColor() != null ? v.getColor() : "–");
 
-        // status i tekst przycisku
         if (isRented) {
             lblStatus.setText("Wypożyczony");
             btnReserve.setText("Anuluj");
@@ -153,47 +152,51 @@ public class DetailsPanel extends JPanel {
             btnReserve.setText("Rezerwuj");
         }
 
-        // serial/plate
         String serialOrPlate = "–";
-        if (v instanceof Bike) serialOrPlate = ((Bike) v).getSerialNumber();
-        else if (v instanceof Scooter) serialOrPlate = ((Scooter) v).getSerialNumber();
-        else if (v instanceof Car) serialOrPlate = ((Car) v).getLicensePlate();
+        if (v instanceof Bike)    serialOrPlate = ((Bike)v).getSerialNumber();
+        if (v instanceof Scooter) serialOrPlate = ((Scooter)v).getSerialNumber();
+        if (v instanceof Car)     serialOrPlate = ((Car)v).getLicensePlate();
         lblSerialOrPlate.setText(serialOrPlate);
 
         lblPricePerHour.setText(String.format("%.2f zł", v.getPricePerHour()));
 
-        CardLayout cl = (CardLayout) cardDates.getLayout();
+        CardLayout cl = (CardLayout)cardDates.getLayout();
         if (isRented) {
-            // wypożyczony: labeli okres, anuluj
             cl.show(cardDates, "LABEL");
             lblFromValue.setText(String.format("%tF", v.getRentedFrom()));
             lblToValue  .setText(String.format("%tF", v.getRentedTo()));
+
             spinnerFrom.setEnabled(false);
-            spinnerTo  .setEnabled(false);
-            btnCalc    .setEnabled(false);
-            btnReserve .setEnabled(true);
-            btnReset   .setEnabled(false);
-            long hours = Duration.between(
-                    v.getRentedFrom().toInstant(),
-                    v.getRentedTo().toInstant()).toHours();
-            lblTotalPrice.setText(String.format("%.2f zł", hours * v.getPricePerHour()));
-        } else if (isMaintenance) {
-            // serwisowany: input daty, rezerwuj zablokowany
+            spinnerTo.setEnabled(false);
+            spinnerDiscount.setEnabled(false);
+            btnCalc.setEnabled(false);
+            btnReserve.setEnabled(true);
+            btnReset.setEnabled(false);
+
+            double total = v.calculatePrice(
+                    v.getRentedFrom(),
+                    v.getRentedTo(),
+                    v.getDiscountPercent()
+            );
+            lblTotalPrice.setText(String.format("%.2f zł", total));
+
+        } else if(isMaintenance){
             cl.show(cardDates, "INPUT");
             spinnerFrom.setEnabled(true);
-            spinnerTo  .setEnabled(true);
-            btnCalc    .setEnabled(true);
-            btnReserve .setEnabled(false);
-            btnReset   .setEnabled(true);
+            spinnerTo.setEnabled(true);
+            spinnerDiscount.setEnabled(true);
+            btnCalc.setEnabled(true);
+            btnReserve.setEnabled(false);
+            btnReset.setEnabled(true);
             lblTotalPrice.setText("–");
-        } else {
-            // dostępny: input daty, rezerwuj
+        } else{
             cl.show(cardDates, "INPUT");
             spinnerFrom.setEnabled(true);
-            spinnerTo  .setEnabled(true);
-            btnCalc    .setEnabled(true);
-            btnReserve .setEnabled(true);
-            btnReset   .setEnabled(true);
+            spinnerTo.setEnabled(true);
+            spinnerDiscount.setEnabled(true);
+            btnCalc.setEnabled(true);
+            btnReserve.setEnabled(true);
+            btnReset.setEnabled(true);
             lblTotalPrice.setText("–");
         }
     }
@@ -204,7 +207,6 @@ public class DetailsPanel extends JPanel {
         boolean isRented = "RENTED".equalsIgnoreCase(v.getStatus());
 
         if (isRented) {
-            // anulowanie wypożyczenia
             if (!VehicleRepository.cancelRental(v)) {
                 JOptionPane.showMessageDialog(this,
                         "Nie udało się anulować wypożyczenia.",
@@ -215,16 +217,17 @@ public class DetailsPanel extends JPanel {
                     "Wypożyczenie zostało anulowane.",
                     "Anuluj", JOptionPane.INFORMATION_MESSAGE);
         } else {
-            // rezerwacja
-            Date from = (Date) spinnerFrom.getValue();
-            Date to   = (Date) spinnerTo.getValue();
+            Date from     = (Date)spinnerFrom.getValue();
+            Date to       = (Date)spinnerTo.getValue();
+            double discount = (Double)spinnerDiscount.getValue();
+
             if (to.before(from)) {
                 JOptionPane.showMessageDialog(this,
                         "Data zakończenia musi być po dacie rozpoczęcia!",
                         "Błąd dat", JOptionPane.ERROR_MESSAGE);
                 return;
             }
-            if (!VehicleRepository.rentVehicle(v, from, to)) {
+            if (!VehicleRepository.rentVehicle(v, from, to, discount)) {
                 JOptionPane.showMessageDialog(this,
                         "Nie udało się zarezerwować pojazdu.",
                         "Błąd", JOptionPane.ERROR_MESSAGE);
@@ -234,24 +237,43 @@ public class DetailsPanel extends JPanel {
                     "Pojazd został pomyślnie zarezerwowany.",
                     "Rezerwacja", JOptionPane.INFORMATION_MESSAGE);
         }
+
         model.removeElement(v);
         resetSelection();
     }
 
+    private void calculateTotal() {
+        Vehicle v = list.getSelectedValue();
+        if (v == null) return;
+        Date from     = (Date)spinnerFrom.getValue();
+        Date to       = (Date)spinnerTo.getValue();
+        double discount = (Double)spinnerDiscount.getValue();
+
+        double total = v.calculatePrice(from, to, discount);
+        lblTotalPrice.setText(String.format("%.2f zł", total));
+    }
+
     private void resetSelection() {
         list.clearSelection();
-        lblBrandModel   .setText("–");
-        lblYear         .setText("–");
-        lblColor        .setText("–");
+        lblBrandModel.setText("–");
+        lblYear.setText("–");
+        lblColor.setText("–");
         lblSerialOrPlate.setText("–");
-        lblPricePerHour .setText("–");
-        lblStatus       .setText("–");
-        lblTotalPrice   .setText("–");
-        ((CardLayout) cardDates.getLayout()).show(cardDates, "INPUT");
+        lblPricePerHour.setText("–");
+        lblStatus.setText("–");
+        lblTotalPrice.setText("–");
+
+        // Reset dat i zniżki:
+        spinnerFrom.setValue(new Date());
+        spinnerTo.setValue(new Date());
+        spinnerDiscount.setValue(0.0);
+
+        ((CardLayout)cardDates.getLayout()).show(cardDates, "INPUT");
         spinnerFrom.setEnabled(true);
-        spinnerTo  .setEnabled(true);
-        btnCalc    .setEnabled(true);
-        btnReserve .setEnabled(false);
+        spinnerTo.setEnabled(true);
+        spinnerDiscount.setEnabled(true);
+        btnCalc.setEnabled(true);
+        btnReserve.setEnabled(false);
     }
 
     private JSpinner createDateSpinner() {
@@ -260,15 +282,5 @@ public class DetailsPanel extends JPanel {
         JSpinner spinner = new JSpinner(model);
         spinner.setEditor(new JSpinner.DateEditor(spinner, "yyyy-MM-dd"));
         return spinner;
-    }
-
-    private void calculateTotal() {
-        Vehicle v = list.getSelectedValue();
-        if (v == null) return;
-        Date d1 = (Date) spinnerFrom.getValue();
-        Date d2 = (Date) spinnerTo.getValue();
-        long hours = Duration.between(d1.toInstant(), d2.toInstant()).toHours();
-        if (hours < 0) hours = 0;
-        lblTotalPrice.setText(String.format("%.2f zł", hours * v.getPricePerHour()));
     }
 }
