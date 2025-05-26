@@ -1,4 +1,3 @@
-// src/GUI/VehicleListPanel.java
 package GUI;
 
 import db.VehicleRepository;

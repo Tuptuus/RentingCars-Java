@@ -1,7 +1,7 @@
-// src/GUI/DetailsPanel.java
 package GUI;
 
 import db.VehicleRepository;
+import exception.InvalidRentalException;
 import model.Vehicle;
 import model.Car;
 import model.Bike;
@@ -76,7 +76,7 @@ public class DetailsPanel extends JPanel {
         inputDatesPanel.setBorder(BorderFactory.createTitledBorder("Okres wypożyczenia i zniżka"));
         spinnerFrom     = createDateSpinner();
         spinnerTo       = createDateSpinner();
-        spinnerDiscount = new JSpinner(new SpinnerNumberModel(0.0, 0.0, 100.0, 0.5));
+        spinnerDiscount = new JSpinner(new SpinnerNumberModel(0.0, 0.0, 150.0, 0.5));
 
         inputDatesPanel.add(new JLabel("Data od:"));    inputDatesPanel.add(spinnerFrom);
         inputDatesPanel.add(new JLabel("Data do:"));    inputDatesPanel.add(spinnerTo);
@@ -216,30 +216,43 @@ public class DetailsPanel extends JPanel {
             JOptionPane.showMessageDialog(this,
                     "Wypożyczenie zostało anulowane.",
                     "Anuluj", JOptionPane.INFORMATION_MESSAGE);
+            model.removeElement(v);
+            resetSelection();
         } else {
-            Date from     = (Date)spinnerFrom.getValue();
-            Date to       = (Date)spinnerTo.getValue();
-            double discount = (Double)spinnerDiscount.getValue();
+            try {
+                Date from     = (Date) spinnerFrom.getValue();
+                Date to       = (Date) spinnerTo.getValue();
+                double discount = (Double) spinnerDiscount.getValue();
 
-            if (to.before(from)) {
+                long millis = to.getTime() - from.getTime();
+                long hours  = millis / (1000 * 60 * 60);
+                if (hours < 24) {
+                    throw new InvalidRentalException("Okres wypożyczenia musi trwać co najmniej 1 dzień.");
+                }
+                if (discount < 0 || discount > 100) {
+                    throw new InvalidRentalException("Zniżka musi być w zakresie 0–100%.");
+                }
+
+                if (!VehicleRepository.rentVehicle(v, from, to, discount)) {
+                    JOptionPane.showMessageDialog(this,
+                            "Nie udało się zarezerwować pojazdu.",
+                            "Błąd", JOptionPane.ERROR_MESSAGE);
+                    return;
+                }
                 JOptionPane.showMessageDialog(this,
-                        "Data zakończenia musi być po dacie rozpoczęcia!",
-                        "Błąd dat", JOptionPane.ERROR_MESSAGE);
-                return;
-            }
-            if (!VehicleRepository.rentVehicle(v, from, to, discount)) {
+                        "Pojazd został pomyślnie zarezerwowany.",
+                        "Rezerwacja", JOptionPane.INFORMATION_MESSAGE);
+
+                model.removeElement(v);
+                resetSelection();
+
+            } catch (InvalidRentalException ire) {
                 JOptionPane.showMessageDialog(this,
-                        "Nie udało się zarezerwować pojazdu.",
-                        "Błąd", JOptionPane.ERROR_MESSAGE);
-                return;
+                        ire.getMessage(),
+                        "Błąd rezerwacji",
+                        JOptionPane.ERROR_MESSAGE);
             }
-            JOptionPane.showMessageDialog(this,
-                    "Pojazd został pomyślnie zarezerwowany.",
-                    "Rezerwacja", JOptionPane.INFORMATION_MESSAGE);
         }
-
-        model.removeElement(v);
-        resetSelection();
     }
 
     private void calculateTotal() {

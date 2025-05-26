@@ -1,4 +1,3 @@
-// src/model/Vehicle.java
 package model;
 
 import java.util.Date;
@@ -14,7 +13,7 @@ public abstract class Vehicle {
     protected int year;
     protected Date rentedFrom;
     protected Date rentedTo;
-    protected double discountPercent;      // <--- nowe pole
+    protected double discountPercent;
 
     public Vehicle(String id,
                    String brand,

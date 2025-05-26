@@ -1,4 +1,3 @@
-// src/db/VehicleRepository.java
 package db;
 
 import com.mongodb.client.FindIterable;
@@ -21,7 +20,6 @@ public class VehicleRepository {
     private static MongoCollection<Document> carsCol()    { return MongoConnection.getCarsCollection(); }
     private static MongoCollection<Document> bikesCol()   { return MongoConnection.getBikesCollection(); }
     private static MongoCollection<Document> scootersCol(){ return MongoConnection.getScooterCollection(); }
-    private static MongoCollection<Document> rentedCol()  { return MongoConnection.getRentedCollection(); }
 
     /** wszystkie auta oprócz RENTED */
     public static List<Car> findAllCars() {
@@ -44,9 +42,7 @@ public class VehicleRepository {
         return rented;
     }
 
-    /**
-     * Oznacza pojazd jako wypożyczony (status=RENTED + daty).
-     */
+    /** Oznacza pojazd jako wypożyczony (status=RENTED + daty).*/
     public static boolean rentVehicle(Vehicle v, Date from, Date to, double discountPercent) {
         MongoCollection<Document> col = getCollectionFor(v);
         String id = v.getId();
@@ -81,30 +77,23 @@ public class VehicleRepository {
     }
 
     @SuppressWarnings("unchecked")
-    private static <T extends Vehicle> List<T> mapDocuments(FindIterable<Document> docs,
-                                                            String type,
-                                                            boolean onlyRented) {
+    private static <T extends Vehicle> List<T> mapDocuments(FindIterable<Document> docs, String type, boolean onlyRented) {
         List<Vehicle> result = new ArrayList<>();
         for (Document doc : docs) {
             String status = doc.getString("status");
             boolean isRented = "RENTED".equalsIgnoreCase(status);
             if (onlyRented ^ isRented) continue;
 
-            String id       = doc.get("_id").toString();
+            String id       = doc.getString("_id");
             String brand    = doc.getString("brand");
             String model    = doc.getString("model");
-            Object priceObj = doc.containsKey("basePricePerHour")
-                    ? doc.get("basePricePerHour")
-                    : doc.get("priceperhour");
+            Object priceObj = doc.get("basePricePerHour");
             double price    = (priceObj instanceof Number) ? ((Number) priceObj).doubleValue() : 0.0;
             String color    = doc.getString("color");
             Integer year    = doc.getInteger("year");
             Date rentedFrom = doc.getDate("rentedFrom");
             Date rentedTo   = doc.getDate("rentedTo");
-            double discount = doc.containsKey("discountPercent")
-                    ? doc.getDouble("discountPercent")
-                    : 0.0;
-
+            double discount = doc.containsKey("discountPercent") ? doc.getDouble("discountPercent") : 0.0;
             Vehicle v;
             switch (type) {
                 case "CAR":
